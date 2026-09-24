@@ -1,0 +1,6 @@
+{
+  "name": "WeekRoutine",
+  "description": "App per creare e organizzare la tua routine settimanale ciclica con eventi e promemoria senza date di calendario.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
