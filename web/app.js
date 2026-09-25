@@ -44,9 +44,33 @@ $("#routineForm").onsubmit=function(e){e.preventDefault();const id=$("#editId").
 $("#deleteBtn").onclick=function(){const id=$("#editId").value;data=data.filter(function(x){return x.id!==id});save();$("#modal").classList.add("hidden");render()};
 $$("[data-prompt]").forEach(function(b){b.onclick=function(){sendCoach(b.dataset.prompt)}});
 $("#coachForm").onsubmit=function(e){e.preventDefault();const v=$("#coachText").value.trim();if(v)sendCoach(v);$("#coachText").value=""};
-function sendCoach(text){const box=$("#coachMessages");box.insertAdjacentHTML("beforeend",'<div class="bubble user">'+esc(text)+'</div>');const total=data.length,done=data.filter(function(x){return x.status==="COMPLETED"}).length;let answer="Posso analizzare i tuoi dati locali. ";if(/priorit/i.test(text))answer+="Le attività ad alta priorità ancora aperte sono: "+(data.filter(function(x){return x.priority==="Alta"&&x.status!=="COMPLETED"}).slice(0,3).map(function(x){return x.title}).join(", ")||"nessuna")+".";
-else if(/settim|riepilogo/i.test(text))answer+="Hai "+total+" attività pianificate, "+done+" completate ("+(total?Math.round(done/total*100):0)+"%). Tempo pianificato: "+fmt(data.reduce(function(s,x){return s+planned(x)},0))+".";
-else answer+="Posso già vedere completamento, priorità, categorie e tempo pianificato. Il collegamento Gemini reale verrà aggiunto tramite Netlify Function sicura.";
-setTimeout(function(){box.insertAdjacentHTML("beforeend",'<div class="bubble ai">'+esc(answer)+'</div>');box.scrollTop=box.scrollHeight},250)}
+async function sendCoach(text){
+  const box=$("#coachMessages");
+  box.insertAdjacentHTML("beforeend",'<div class="bubble user">'+esc(text)+'</div>');
+  const history=Array.from(box.querySelectorAll(".bubble")).slice(-11,-1).map(function(el){
+    return {role:el.classList.contains("user")?"user":"model",text:el.textContent||""};
+  });
+  const pending=document.createElement("div");
+  pending.className="bubble ai";
+  pending.textContent="Sto analizzando la tua routine…";
+  box.appendChild(pending);
+  box.scrollTop=box.scrollHeight;
+  try{
+    const response=await fetch("https://aexmdxnmlqxkqkvcjazb.supabase.co/functions/v1/focus-coach",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "apikey":"sb_publishable_ct-z7YfE81qD1ecrWQST2A_N2eIB5dl"
+      },
+      body:JSON.stringify({message:text,history:history,routine:data})
+    });
+    const result=await response.json().catch(function(){return{}});
+    if(!response.ok) throw new Error(result.error||"Errore nel collegamento a Gemini.");
+    pending.textContent=result.reply||"Gemini non ha restituito una risposta.";
+  }catch(error){
+    pending.textContent="Non riesco a collegarmi a Gemini in questo momento. "+(error&&error.message?error.message:"Riprova tra poco.");
+  }
+  box.scrollTop=box.scrollHeight;
+}
 $("#exportBtn").onclick=function(){const rows=[["Titolo","Giorni","Inizio","Fine","Categoria","Priorità","Stato","Pianificato min","Fatto min","Non fatto min"]].concat(data.map(function(x){return [x.title,x.days.map(function(d){return DAYS[d][1]}).join(" / "),x.start||"",x.end||"",x.category,x.priority,x.status,planned(x),doneM(x),missedM(x)]}));const csv=rows.map(function(r){return r.map(function(v){return '"'+String(v).replace(/"/g,'""')+'"'}).join(",")}).join("\\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download="routine-report.csv";a.click();URL.revokeObjectURL(a.href)};
 render();if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js");
